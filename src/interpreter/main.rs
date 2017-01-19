@@ -35,7 +35,7 @@ fn interpret (instructions: &Vec<u8>, input: &mut Read, output: &mut Write) {
                 data[dptr] =
                     match input.read(&mut buf) {
                         Ok(1) => buf[0],
-                        _     => data[dptr],
+                        _     => 0,
                     };
                 iptr += 1;
                 format!("Read character from input '{}'.", data[dptr] as char) },
