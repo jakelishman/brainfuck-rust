@@ -20,6 +20,12 @@ pub enum Op {
 
 #[derive(Debug)]
 pub enum Expression {
-    Loop (Vec<Expression>, Option<usize>),
+    Loop (Box<Vec<Expression>>, Option<usize>),
     Op   (Op),
+}
+
+#[derive(Debug)]
+pub enum Program {
+    Base   (Box<Vec<BaseOp>>),
+    Native (Expression),
 }

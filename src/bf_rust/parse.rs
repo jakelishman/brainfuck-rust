@@ -18,7 +18,7 @@ pub fn to_base_ops (input: &String) -> Vec<BaseOp> {
         .collect()
 }
 
-fn find_matching_end_loop (input: &Vec<BaseOp>,
+pub fn find_matching_end_loop (input: &Vec<BaseOp>,
                            start_pos: usize) -> Option<usize> {
     let mut open_loops = 0;
     for i in start_pos + 1 .. input.len() {
@@ -70,7 +70,10 @@ fn to_ops_helper (input: &Vec<BaseOp>,
                         return Err(msg);
                     },
                 };
-                Expression::Loop (to_ops_helper(input, start + 1, i - 1)?, None)
+                Expression::Loop (
+                    Box::new(to_ops_helper(input, start + 1, i - 1)?),
+                    None
+                )
             },
         };
         out.push(expr);
