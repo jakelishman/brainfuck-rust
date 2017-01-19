@@ -75,27 +75,86 @@ fn read_instructions (file_path: &String) -> Result<Vec<u8>, io::Error> {
     Ok(instructions)
 }
 
+struct CommandLineFlags {
+    debug: bool,
+    version: bool,
+    help: bool,
+}
+
+fn parse_command_line_flags (args: std::env::Args) -> (Vec<String>, CommandLineFlags) {
+    let mut others = vec![];
+    let mut individual_flags = vec![];
+    let mut flags = CommandLineFlags { debug: false, version: false, help: false };
+    for arg in args.skip(1) {
+        if arg.starts_with("--") {
+            individual_flags.push(arg[2..].to_string());
+        } else if arg.starts_with("-") {
+            for c in arg.chars().skip(1) {
+                individual_flags.push(c.to_string())
+            }
+        } else {
+            others.push(arg);
+        }
+    }
+
+    for flag in individual_flags.iter() {
+        match flag.as_ref() {
+            "d" | "debug" => flags.debug = true,
+            "h" | "help"  => flags.help = true,
+            "v" | "version" => flags.version = true,
+            unknown => writeln!(io::stderr(), "Unknown command line flag: '{}'.", unknown)
+                           .expect("Failed to write to stderr."),
+        }
+    }
+    (others, flags)
+}
+
+fn show_version() {
+    writeln!(io::stderr(), "brainfuck_rust interpreter: version 0.1.0")
+        .expect("Failed to write to stderr.");
+}
+
+fn show_help() {
+    writeln!(io::stderr(), "\
+SYNOPSIS
+  interpreter [-d] file1.bf [file2.bf ...]
+  interpreter -h
+  interpreter -v
+
+OPTIONS
+  -d --debug
+      Enable debug messages for each brainfuck command parsed.
+  -h --help
+      Print this help message and exit.
+  -v --version
+      Show the version information.")
+        .expect("Failed to write to stderr.");
+}
+
 fn main () {
-    let mut stderr = io::stderr();
     let mut stdin  = io::stdin();
     let mut stdout = io::stdout();
     stdin.lock();
     stdout.lock();
 
-    let args = std::env::args();
-    if args.len() == 1 {
-        writeln!(stderr, "I need a list of input files as arguments.")
-            .expect("Failed to write to stderr.");
-        std::process::exit(1);
+    let (files, flags) = parse_command_line_flags(std::env::args());
+
+    if flags.version {
+        show_version();
+        return;
     }
 
-    for argument in args.skip(1) {
-        match read_instructions(&argument) {
+    if flags.help || files.len() == 0 {
+        show_help();
+        return;
+    }
+
+    for file in files.iter() {
+        match read_instructions(&file) {
             Ok(ins)  => interpret(&ins, &mut stdin, &mut stdout),
             Err(err) =>
-                writeln!(stderr, "Failed to open file '{}' with error:\n{}", argument, err)
+                writeln!(io::stderr(), "Failed to open file '{}' with error:\n{}", file, err)
                     .expect("Failed to write to stderr."),
         };
-        println!("");
     }
 }
