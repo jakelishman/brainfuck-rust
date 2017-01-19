@@ -6,6 +6,10 @@ publish = false
 
 [dependencies]
 
+[lib]
+name = "bf_rust"
+path = "src/bf_rust/lib.rs"
+
 [[bin]]
-name = "interpreter"
+name = "bfri"
 path = "src/interpreter/main.rs"
