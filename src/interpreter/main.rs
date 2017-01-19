@@ -1,7 +1,32 @@
 use std::io;
 use std::io::{Read, Write};
 
-fn interpret (instructions: &Vec<u8>, input: &mut Read, output: &mut Write) {
+macro_rules! debug_message {
+    ($flag: expr, $dst: expr, $fmt: expr) => {
+        if $flag {
+            writeln!($dst, $fmt).expect("Failed to write debug message.");
+        }
+    };
+    ($flag: expr, $dst: expr, $fmt: expr, $($arg: expr),+) => {
+        if $flag {
+            writeln!($dst, $fmt, $($arg),+).expect("Failed to write debug message.")
+        }
+    };
+}
+
+struct CommandLineFlags {
+    debug: bool,
+    version: bool,
+    help: bool,
+}
+
+struct StreamSet<'a> {
+    in_: &'a mut Read,
+    out: &'a mut Write,
+    err: &'a mut Write,
+}
+
+fn interpret<'a> (instructions: &Vec<u8>, streams: &'a mut StreamSet, flags: &CommandLineFlags) {
     let mut loop_points = Vec::new();
     let mut data = [0u8; 1024];
     let mut iptr = 0;
@@ -14,31 +39,37 @@ fn interpret (instructions: &Vec<u8>, input: &mut Read, output: &mut Write) {
             '>' => {
                 dptr += 1;
                 iptr += 1;
-                format!("Increment data pointer to {}.", dptr) },
+                debug_message!(flags.debug, streams.err,
+                               "Increment data pointer to {}.", dptr) },
             '<' => {
                 dptr -= 1;
                 iptr += 1;
-                format!("Decrement data pointer to {}.", dptr) },
+                debug_message!(flags.debug, streams.err,
+                               "Decrement data pointer to {}.", dptr) },
             '+' => {
                 data[dptr] = match data[dptr] { 255 => 0, num => num + 1, };
                 iptr += 1;
-                format!("Increment value at {} to {}.", dptr, data[dptr]) },
+                debug_message!(flags.debug, streams.err,
+                               "Increment value at {} to {}.", dptr, data[dptr]) },
             '-' => {
                 data[dptr] = match data[dptr] { 0 => 255, num => num - 1, };
                 iptr += 1;
-                format!("Decrement value at {} to {}.", dptr, data[dptr]) },
+                debug_message!(flags.debug, streams.err,
+                               "Decrement value at {} to {}.", dptr, data[dptr]) },
             '.' => {
-                write!(output, "{}", data[dptr] as char).expect("Failed to write.");
+                write!(streams.out, "{}", data[dptr] as char).expect("Failed to write.");
                 iptr += 1;
-                format!("Output character '{}'.", data[dptr] as char) },
+                debug_message!(flags.debug, streams.err,
+                               "Output character '{}'.", data[dptr] as char) },
             ',' => {
                 data[dptr] =
-                    match input.read(&mut buf) {
+                    match streams.in_.read(&mut buf) {
                         Ok(1) => buf[0],
                         _     => 0,
                     };
                 iptr += 1;
-                format!("Read character from input '{}'.", data[dptr] as char) },
+                debug_message!(flags.debug, streams.err,
+                               "Read character from input '{}'.", data[dptr] as char) },
             '[' => {
                 if data[dptr] == 0u8 {
                     let mut open_loops = 0;
@@ -52,18 +83,22 @@ fn interpret (instructions: &Vec<u8>, input: &mut Read, output: &mut Write) {
                         }
                     }
                     iptr += 1;
-                    format!("Finished loop with data pointer {}.", dptr)
+                    debug_message!(flags.debug, streams.err,
+                                   "Finished loop with data pointer {}.", dptr)
                 } else {
                     loop_points.push(iptr);
                     iptr += 1;
-                    format!("Loop with data[{}] = {}.", dptr, data[dptr])
+                    debug_message!(flags.debug, streams.err,
+                                   "Loop with data[{}] = {}.", dptr, data[dptr])
                 } },
             ']' => {
                 iptr = loop_points.pop().expect("Mismatched loop points.");
-                format!("Returning to beginning of loop at {}.", iptr) },
+                debug_message!(flags.debug, streams.err,
+                               "Returning to beginning of loop at {}.", iptr) },
             c   => {
                 iptr += 1;
-                format!("Skipping non-control character '{}'.", c) },
+                debug_message!(flags.debug, streams.err,
+                               "Skipping non-control character '{}'.", c) },
         };
     }
 }
@@ -73,12 +108,6 @@ fn read_instructions (file_path: &String) -> Result<Vec<u8>, io::Error> {
     let mut instructions = vec![];
     File::open(file_path)?.read_to_end(&mut instructions)?;
     Ok(instructions)
-}
-
-struct CommandLineFlags {
-    debug: bool,
-    version: bool,
-    help: bool,
 }
 
 fn parse_command_line_flags (args: std::env::Args) -> (Vec<String>, CommandLineFlags) {
@@ -102,20 +131,18 @@ fn parse_command_line_flags (args: std::env::Args) -> (Vec<String>, CommandLineF
             "d" | "debug" => flags.debug = true,
             "h" | "help"  => flags.help = true,
             "v" | "version" => flags.version = true,
-            unknown => writeln!(io::stderr(), "Unknown command line flag: '{}'.", unknown)
-                           .expect("Failed to write to stderr."),
+            unknown => debug_message!(true, io::stderr(), "Unknown command line flag: '{}'.", unknown)
         }
     }
     (others, flags)
 }
 
 fn show_version() {
-    writeln!(io::stderr(), "brainfuck_rust interpreter: version 0.1.0")
-        .expect("Failed to write to stderr.");
+    debug_message!(true, io::stderr(), "brainfuck_rust interpreter: version 0.1.0")
 }
 
 fn show_help() {
-    writeln!(io::stderr(), "\
+    debug_message!(true, io::stderr(), "\
 SYNOPSIS
   interpreter [-d] file1.bf [file2.bf ...]
   interpreter -h
@@ -127,15 +154,16 @@ OPTIONS
   -h --help
       Print this help message and exit.
   -v --version
-      Show the version information.")
-        .expect("Failed to write to stderr.");
+      Show the version information.");
 }
 
 fn main () {
     let mut stdin  = io::stdin();
     let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
     stdin.lock();
     stdout.lock();
+    stderr.lock();
 
     let (files, flags) = parse_command_line_flags(std::env::args());
 
@@ -151,10 +179,8 @@ fn main () {
 
     for file in files.iter() {
         match read_instructions(&file) {
-            Ok(ins)  => interpret(&ins, &mut stdin, &mut stdout),
-            Err(err) =>
-                writeln!(io::stderr(), "Failed to open file '{}' with error:\n{}", file, err)
-                    .expect("Failed to write to stderr."),
+            Ok(ins)  => interpret(&ins, &mut StreamSet { in_: &mut stdin, out: &mut stdout, err: &mut stderr }, &flags),
+            Err(err) => debug_message!(true, io::stderr(), "Failed to open file '{}' with error:\n{}", file, err)
         };
     }
 }
