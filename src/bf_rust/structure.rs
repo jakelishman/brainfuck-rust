@@ -12,7 +12,7 @@ pub enum BaseOp {
 
 #[derive(Debug)]
 pub enum Op {
-    ChangeData    (i16),
+    ChangeData    (i8),
     ChangePointer (i16),
     Read          (usize),
     Write         (usize),
@@ -20,12 +20,12 @@ pub enum Op {
 
 #[derive(Debug)]
 pub enum Expression {
-    Loop (Box<Vec<Expression>>, Option<usize>),
+    Loop (Vec<Expression>, Option<usize>),
     Op   (Op),
 }
 
 #[derive(Debug)]
 pub enum Program {
-    Base   (Box<Vec<BaseOp>>),
-    Native (Expression),
+    Base   (Vec<BaseOp>),
+    Native (Vec<Expression>),
 }

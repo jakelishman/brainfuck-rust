@@ -71,7 +71,7 @@ fn to_ops_helper (input: &Vec<BaseOp>,
                     },
                 };
                 Expression::Loop (
-                    Box::new(to_ops_helper(input, start + 1, i - 1)?),
+                    to_ops_helper(input, start + 1, i - 1)?,
                     None
                 )
             },
